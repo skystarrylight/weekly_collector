@@ -25,7 +25,7 @@ class JiraClient(IssueRepositoryPort):
         """
         search_url = f'{self.base_url}/search'
         params = {'jql': jql_query, 'maxResults': 1000}
-
+        print(params)
         async with aiohttp.ClientSession(auth=self.auth) as session:
             async with session.get(search_url, params=params) as response:
                 response.raise_for_status()
@@ -33,39 +33,41 @@ class JiraClient(IssueRepositoryPort):
                 return [self._parse_issue(issue_data) for issue_data in data.get('issues', [])]
 
     @staticmethod
-    def _parse_issue(self, issue_data: Dict) -> Issue:
+    def _parse_issue(issue_data: Dict) -> Issue:
         """
         Jira API로부터 받은 이슈 데이터를 Issue 객체로 변환.
+
         Args:
             issue_data (Dict): 이슈 데이터 JSON.
+
         Returns:
             Issue: 파싱된 이슈 객체.
         """
         fields = issue_data.get('fields', {})
 
-        # 미리 정의한 필드와 Jira JSON의 필드를 동적으로 매핑
-        field_map = {
+        # assignee가 None인 경우 'Unassigned'로 설정
+        assignee = fields.get('assignee', {})
+        assignee_name = assignee.get('displayName', 'Unassigned') if assignee else 'Unassigned'
+
+        issue_dict = {
             'key': issue_data.get('key', ''),
             'summary': fields.get('summary', ''),
-            'description': self._parse_description(fields.get('description')),
+            'description': JiraClient._parse_description(fields.get('description')),
             'status': fields.get('status', {}).get('name', ''),
-            'assignee': fields.get('assignee', {}).get('displayName', ''),
-            'reporter': fields.get('reporter', {}).get('displayName', ''),
-            'priority': fields.get('priority', {}).get('name', ''),
-            'type': fields.get('issuetype', {}).get('name', ''),
+            'assignee': assignee_name,  # 안전한 assignee 값
+            'type': fields.get('issuetype', {}).get('name', 'Issue'),
             'parent': fields.get('parent', {}).get('key', None),
             'subtasks': [subtask.get('key') for subtask in fields.get('subtasks', [])],
-            'start_date': self._parse_date(fields.get('customfield_10015')),
-            'due_date': self._parse_date(fields.get('duedate')),
-            'created': self._parse_date(fields.get('created')),
-            'updated': self._parse_date(fields.get('updated')),
+            'start_date': JiraClient._parse_date(fields.get('customfield_10015')),
+            'due_date': JiraClient._parse_date(fields.get('duedate')),
+            'created': JiraClient._parse_date(fields.get('created')),
+            'updated': JiraClient._parse_date(fields.get('updated')),
             'time_spent': fields.get('timespent', None),
             'components': [component.get('name') for component in fields.get('components', [])],
             'labels': fields.get('labels', [])
         }
 
-        # **kwargs를 사용하여 동적으로 Issue 객체 생성
-        return Issue(**field_map)
+        return Issue(**issue_dict)
 
     @staticmethod
     def _parse_description(description_info: Optional[Dict]) -> str:

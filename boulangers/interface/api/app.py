@@ -2,6 +2,9 @@
 
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+
+from starlette.responses import FileResponse
 from typing import List, Dict, Optional
 
 from boulangers.application.services import IssueService
@@ -14,8 +17,18 @@ load_dotenv()
 
 app = FastAPI()
 
-# Static 파일 서빙 설정 (static 디렉토리 사용)
-app.mount("/static", StaticFiles(directory="boulangers/static"), name="static")
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # React 개발 서버 주소
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# 리액트 빌드된 정적 파일을 서빙
+app.mount("/static", StaticFiles(directory="frontend/build/static"), name="static")
 
 
 # IssueService 생성 함수
@@ -33,10 +46,10 @@ def get_issue_service() -> IssueService:
     return issue_service
 
 
-# 기본 엔드포인트: index.html 페이지를 안내
+# 기본 엔드포인트로 리액트의 index.html 제공
 @app.get("/")
-async def read_root():
-    return {"message": "Visit /static/index.html to view the frontend."}
+async def serve_frontend():
+    return FileResponse('frontend/build/index.html')
 
 
 # 에픽 조회 API
@@ -79,23 +92,13 @@ async def read_stories(project_key: str, issue_service: IssueService = Depends(g
 @app.get("/project/{project_key}/hierarchy", response_model=Dict)
 async def read_project_hierarchy(
         project_key: str,
-        jql_query: Optional[str] = Query(None),
         issue_service: IssueService = Depends(get_issue_service)
 ):
     """
     프로젝트 코드 기준으로 에픽 및 각 에픽에 연결된 Task와 Sub-task의 계층 구조를 반환
     """
     try:
-        # 프로젝트 내 모든 에픽을 조회
-        epics = await issue_service.get_epics(project_key, jql_query)
-        project_hierarchy = {}
-
-        # 각 에픽에 대한 계층 구조 생성
-        for epic in epics:
-            hierarchy = await issue_service.get_epic_with_hierarchy(epic.key, jql_query)
-            project_hierarchy[epic.key] = hierarchy
-
-        return project_hierarchy
-
+        hierarchy = await issue_service.get_hierarchical_issues(project_key)
+        return hierarchy
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,102 +1,98 @@
-# infrastructure/jira_client.py
-
 import aiohttp
 from aiohttp import BasicAuth
-from typing import List
+from typing import List, Dict, Optional
 from boulangers.domain.issue import Issue
 from boulangers.application.ports import IssueRepositoryPort
 from datetime import datetime
 
+
 class JiraClient(IssueRepositoryPort):
-    def __init__(self, domain: str, email: str, api_token: str, epic_field: str = '"Epic Link"'):
+    def __init__(self, domain: str, email: str, api_token: str, epic_field: str = '"Epic Link"') -> None:
+        """Jira 클라이언트 초기화."""
         self.base_url = f'https://{domain}.atlassian.net/rest/api/3'
         self.auth = BasicAuth(email, api_token)
         self.epic_field = epic_field
 
     async def fetch_issues(self, jql_query: str) -> List[Issue]:
+        """
+        Jira API로부터 이슈를 조회하고, Issue 객체 리스트로 변환.
+
+        Args:
+            jql_query (str): Jira 쿼리 언어(JQL)를 사용한 검색 조건.
+
+        Returns:
+            List[Issue]: 조회된 이슈들의 리스트.
+        """
         search_url = f'{self.base_url}/search'
-        params = {'jql': jql_query, 'maxResults': 1000}  # 최대 1000개 이슈 가져오기
+        params = {'jql': jql_query, 'maxResults': 1000}
+
         async with aiohttp.ClientSession(auth=self.auth) as session:
             async with session.get(search_url, params=params) as response:
                 response.raise_for_status()
                 data = await response.json()
-                issues_data = data.get('issues', [])
-                return [self._parse_issue(issue_data) for issue_data in issues_data]
+                return [self._parse_issue(issue_data) for issue_data in data.get('issues', [])]
 
     @staticmethod
-    def _parse_issue(issue_data) -> Issue:
+    def _parse_issue(self, issue_data: Dict) -> Issue:
         """
-        주어진 issue_data에서 필드를 파싱하여 Issue 객체를 생성합니다.
-        None 타입이 들어올 수 있는 모든 필드를 안전하게 처리합니다.
+        Jira API로부터 받은 이슈 데이터를 Issue 객체로 변환.
+        Args:
+            issue_data (Dict): 이슈 데이터 JSON.
+        Returns:
+            Issue: 파싱된 이슈 객체.
         """
-        # fields와 그 하위 필드를 안전하게 파싱
-        print(issue_data)
         fields = issue_data.get('fields', {})
-        issue_type_info = fields.get('issuetype', {}) or {}
-        status_info = fields.get('status', {}) or {}
-        assignee_info = fields.get('assignee', {}) or {}
 
-        # 안전하게 필드 값들을 추출 (None일 경우 기본값 설정)
-        key = issue_data.get('key', '')  # 'key'가 없으면 빈 문자열로 설정
-        summary = fields.get('summary', '')  # 요약 정보
-        description_info = fields.get('description', {}) or {}
-        description = JiraClient._parse_description(description_info)  # description 필드가 중첩된 구조이므로 별도 처리
+        # 미리 정의한 필드와 Jira JSON의 필드를 동적으로 매핑
+        field_map = {
+            'key': issue_data.get('key', ''),
+            'summary': fields.get('summary', ''),
+            'description': self._parse_description(fields.get('description')),
+            'status': fields.get('status', {}).get('name', ''),
+            'assignee': fields.get('assignee', {}).get('displayName', ''),
+            'reporter': fields.get('reporter', {}).get('displayName', ''),
+            'priority': fields.get('priority', {}).get('name', ''),
+            'type': fields.get('issuetype', {}).get('name', ''),
+            'parent': fields.get('parent', {}).get('key', None),
+            'subtasks': [subtask.get('key') for subtask in fields.get('subtasks', [])],
+            'start_date': self._parse_date(fields.get('customfield_10015')),
+            'due_date': self._parse_date(fields.get('duedate')),
+            'created': self._parse_date(fields.get('created')),
+            'updated': self._parse_date(fields.get('updated')),
+            'time_spent': fields.get('timespent', None),
+            'components': [component.get('name') for component in fields.get('components', [])],
+            'labels': fields.get('labels', [])
+        }
 
-        # 상태와 담당자 정보 추출
-        status = status_info.get('name', '')  # 상태 정보가 없으면 빈 문자열로 설정
-        assignee = assignee_info.get('displayName', 'Unassigned')  # 담당자 정보가 없으면 'Unassigned'로 설정
-
-        # 이슈 타입 처리 (에픽일 경우에도 안전하게 처리)
-        issue_type = issue_type_info.get('name', 'Issue')  # 이슈 타입이 없으면 'Issue'로 설정
-
-        # 시작일과 종료일 파싱
-        start_date_str = fields.get('customfield_10015', None)  # custom 필드에 시작일 정보가 있을 수 있음
-        due_date_str = fields.get('duedate', None)  # 종료일
-
-        # 날짜를 안전하게 파싱
-        start_date = JiraClient._parse_date(start_date_str)
-        due_date = JiraClient._parse_date(due_date_str)
-
-        return Issue(
-            key=key,
-            summary=summary,
-            description=description,
-            status=status,
-            assignee=assignee,
-            type=issue_type,
-            start_date=start_date,
-            due_date=due_date
-        )
+        # **kwargs를 사용하여 동적으로 Issue 객체 생성
+        return Issue(**field_map)
 
     @staticmethod
-    def _parse_description(description_info):
+    def _parse_description(description_info: Optional[Dict]) -> str:
         """
         중첩된 description 필드를 안전하게 파싱.
-        content 리스트에서 각 텍스트를 추출하여 하나의 문자열로 반환.
+
+        Args:
+            description_info (Optional[Dict]): description JSON 데이터.
+
+        Returns:
+            str: 파싱된 description 문자열.
         """
-        if not description_info or not isinstance(description_info, dict):
+        if not description_info:
             return ''
-
-        # description이 중첩된 구조를 가짐
-        content_list = description_info.get('content', [])
-        if not content_list:
-            return ''
-
-        description_text = ''
-        for content in content_list:
-            # content 안에서 텍스트 추출
-            if 'content' in content:
-                paragraph_content = content['content']
-                for paragraph in paragraph_content:
-                    text = paragraph.get('text', '')
-                    description_text += text + ' '
-
-        return description_text.strip()
+        return ' '.join(paragraph.get('text', '') for content in description_info.get('content', [])
+                        for paragraph in content.get('content', []))
 
     @staticmethod
-    def _parse_date(date_str):
+    def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
         """
-        날짜 문자열을 안전하게 파싱. 형식이 맞지 않거나 None일 경우 None 반환.
+        날짜 문자열을 안전하게 파싱.
+
+        Args:
+            date_str (Optional[str]): 날짜 문자열.
+
+        Returns:
+            Optional[datetime]: 파싱된 날짜 객체 또는 None.
         """
         try:
             return datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else None

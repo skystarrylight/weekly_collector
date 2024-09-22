@@ -4,92 +4,141 @@ from boulangers.application.ports import IssueRepositoryPort
 
 
 class IssueService:
-    def __init__(self, repository: IssueRepositoryPort):
+    def __init__(self, repository: IssueRepositoryPort) -> None:
+        """IssueService 클래스 초기화."""
         self.repository = repository
 
-    # 에픽 조회
+    async def get_issues_by_type(self, project_key: str, issue_type: str, additional_jql: Optional[str] = None) -> List[Issue]:
+        """
+        특정 프로젝트의 이슈를 타입별로 조회, 추가적인 JQL 조건을 적용할 수 있음.
+
+        Args:
+            project_key (str): Jira 프로젝트 키.
+            issue_type (str): 조회할 이슈 타입 (예: 'Epic', 'Task', 'Subtask').
+            additional_jql (Optional[str]): 추가 JQL 조건.
+
+        Returns:
+            List[Issue]: 조회된 이슈 리스트.
+        """
+        jql_query = f'project = "{project_key}" AND issuetype = "{issue_type}"'
+        if additional_jql:
+            jql_query += f" {additional_jql}"
+        return await self.repository.fetch_issues(jql_query)
+
     async def get_epics(self, project_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
-        """
-        특정 프로젝트의 모든 에픽을 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'project = "{project_key}" AND issuetype = "Epic"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        return await self.repository.fetch_issues(jql_query)
+        """에픽 이슈 조회."""
+        return await self.get_issues_by_type(project_key, "Epic", additional_jql)
 
-    # 태스크 조회
     async def get_tasks(self, project_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
-        """
-        특정 프로젝트의 모든 Task를 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'project = "{project_key}" AND issuetype = "Task"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        return await self.repository.fetch_issues(jql_query)
+        """태스크 이슈 조회."""
+        return await self.get_issues_by_type(project_key, "Task", additional_jql)
 
-    # 서브태스크 조회
     async def get_subtasks(self, project_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
-        """
-        특정 프로젝트의 모든 Sub-task를 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'project = "{project_key}" AND issuetype = "Sub-task"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        return await self.repository.fetch_issues(jql_query)
+        """서브태스크 이슈 조회."""
+        return await self.get_issues_by_type(project_key, "Subtask", additional_jql)
 
-    # 스토리 조회
     async def get_stories(self, project_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
-        """
-        특정 프로젝트의 모든 Story를 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'project = "{project_key}" AND issuetype = "Story"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        return await self.repository.fetch_issues(jql_query)
+        """스토리 이슈 조회."""
+        return await self.get_issues_by_type(project_key, "Story", additional_jql)
 
-    # 에픽에 연결된 태스크 조회
-    async def get_tasks_by_epic(self, epic_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
+    async def get_hierarchical_issues(self, project_key: str) -> Dict[str, Dict]:
         """
-        특정 에픽에 연결된 모든 Task를 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'"Epic Link" = "{epic_key}"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        print(jql_query)
-        tasks = await self.repository.fetch_issues(jql_query)
-        print(tasks)
-        return tasks
+        에픽, 태스크, 서브태스크 계층 구조로 이슈들을 반환.
 
-    # 태스크에 연결된 서브태스크 조회
-    async def get_subtasks_by_task(self, task_key: str, additional_jql: Optional[str] = None) -> List[Issue]:
-        """
-        특정 Task에 연결된 모든 Sub-task를 조회, 추가적인 JQL 조건을 적용할 수 있음
-        """
-        jql_query = f'parent = "{task_key}"'
-        if additional_jql:
-            jql_query += f" {additional_jql}"
-        subtasks = await self.repository.fetch_issues(jql_query)
-        return subtasks
+        Args:
+            project_key (str): 프로젝트 키.
 
-    # 에픽과 하위 구조 조회
-    async def get_epic_with_hierarchy(self, epic_key: str, additional_jql: Optional[str] = None) -> Dict:
+        Returns:
+            Dict[str, Dict]: 계층 구조를 나타내는 이슈 딕셔너리.
         """
-        특정 에픽에 연결된 Task 및 각 Task에 연결된 Sub-task를 추가적인 JQL 조건과 함께 계층 구조로 반환
+        try:
+            issues = await self.repository.fetch_issues(f'project = "{project_key}"')
+
+            epic_hierarchy = {}
+            task_map = {}
+            subtask_map = {}
+
+            # 이슈들을 타입별로 그룹화
+            grouped_issues = self._group_issues_by_type(issues)
+
+            # 에픽, 태스크, 서브태스크 추가
+            self._process_issues(grouped_issues['Epic'], epic_hierarchy, task_map, subtask_map, 'tasks')
+            self._process_issues(grouped_issues['Task'], epic_hierarchy, task_map, subtask_map, 'subtasks', 'parent')
+            self._process_issues(grouped_issues['Subtask'], task_map, subtask_map, subtask_map, 'subtasks', 'parent')
+
+            return epic_hierarchy
+
+        except Exception as e:
+            print(f"Error in get_hierarchical_issues: {e}")
+            raise e
+
+    @staticmethod
+    def _group_issues_by_type(issues: List[Issue]) -> Dict[str, List[Issue]]:
         """
-        # 에픽에 연결된 Task 조회
-        tasks = await self.get_tasks_by_epic(epic_key, additional_jql)
+        이슈를 타입별로 그룹화.
 
-        # 각 Task에 연결된 Sub-task 조회
-        task_with_subtasks = []
-        for task in tasks:
-            subtasks = await self.get_subtasks_by_task(task.key, additional_jql)
-            task_with_subtasks.append({
-                "task": task,
-                "subtasks": subtasks
-            })
+        Args:
+            issues (List[Issue]): 이슈 리스트.
 
-        # 에픽과 Task, Sub-task 계층 구조 반환
-        return {
-            "epic": epic_key,
-            "tasks": task_with_subtasks
-        }
+        Returns:
+            Dict[str, List[Issue]]: 타입별로 그룹화된 이슈 딕셔너리.
+        """
+        grouped_issues = {'Epic': [], 'Task': [], 'Subtask': []}
+        for issue in issues:
+            if issue.type == 'Epic':
+                grouped_issues['Epic'].append(issue)
+            elif issue.type == 'Task':
+                grouped_issues['Task'].append(issue)
+            elif issue.type == 'Subtask':
+                grouped_issues['Subtask'].append(issue)
+        return grouped_issues
+
+    @staticmethod
+    def _process_issues(issues: List[Issue], parent_map: Dict, issue_map: Dict, sub_map: Dict, child_key: str, parent_key: Optional[str] = None) -> None:
+        """
+        이슈를 부모-자식 관계에 따라 계층 구조에 추가.
+
+        Args:
+            issues (List[Issue]): 이슈 리스트.
+            parent_map (Dict): 부모 이슈 맵.
+            issue_map (Dict): 추가될 이슈 맵.
+            sub_map (Dict): 하위 이슈 맵.
+            child_key (str): 하위 이슈를 저장할 키 ('tasks' 또는 'subtasks').
+            parent_key (Optional[str]): 부모 이슈 키 (예: 'parent').
+        """
+        for issue in issues:
+            parent_id = getattr(issue, parent_key) if parent_key else None
+            if parent_key and parent_id and parent_id in parent_map:
+                IssueService._add_to_hierarchy(issue, parent_map[parent_id][child_key], issue_map, sub_map, child_key)
+            else:
+                IssueService._add_to_hierarchy(issue, parent_map, issue_map, sub_map, child_key)
+
+    @staticmethod
+    def _add_to_hierarchy(issue: Issue, hierarchy: Dict, issue_map: Dict, sub_map: Dict, child_key: str) -> None:
+        """
+        이슈를 계층 구조에 추가.
+
+        Args:
+            issue (Issue): 추가할 이슈.
+            hierarchy (Dict): 계층 구조 딕셔너리.
+            issue_map (Dict): 추가될 이슈 맵.
+            sub_map (Dict): 하위 이슈 맵.
+            child_key (str): 하위 이슈를 저장할 키 ('tasks' 또는 'subtasks').
+        """
+        if issue.key not in hierarchy:
+            hierarchy[issue.key] = {
+                'summary': issue.summary,
+                'status': issue.status,
+                'assignee': issue.assignee if issue.assignee else 'Unassigned',
+                'reporter': issue.reporter,
+                'priority': issue.priority,
+                'start_date': issue.start_date,
+                'due_date': issue.due_date,
+                'created': issue.created,
+                'updated': issue.updated,
+                'time_spent': issue.time_spent,
+                'components': issue.components,
+                'labels': issue.labels,
+                child_key: {}
+            }
+        issue_map[issue.key] = hierarchy[issue.key]

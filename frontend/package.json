@@ -1,0 +1,51 @@
+{
+  "name": "boulanger-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Boulanger App - A Bread and Baker Themed Issue Tracker",
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.0.0",
+    "@emotion/styled": "^11.0.0",
+    "@mui/icons-material": "^5.0.0",
+    "@mui/material": "^5.0.0",
+    "@mui/x-data-grid-pro": "^7.18.0",
+    "@nosferatu500/react-sortable-tree": "^4.4.0",
+    "ag-grid-community": "^32.2.0",
+    "ag-grid-react": "^32.2.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-icons": "^4.0.0",
+    "react-scripts": "5.0.1",
+    "react-sortable-tree-theme-file-explorer": "^2.0.0",
+    "react-table": "^7.8.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "author": "Boulanger Team",
+  "license": "ISC"
+}

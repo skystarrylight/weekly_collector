@@ -1,0 +1,22 @@
+/* Tree 스타일을 위한 CSS */
+
+.tree-grid-container .rst__rowLabel {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tree-grid-container .rst__rowContents {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tree-grid-container .rst__row {
+    border-bottom: 1px solid #e0e0e0;
+    padding: 10px;
+}
+
+.tree-grid-container .rst__moveHandle {
+    background-color: #f0f0f0;
+    cursor: move;
+}

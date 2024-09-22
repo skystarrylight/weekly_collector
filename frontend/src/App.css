@@ -1,0 +1,124 @@
+/* 테이블 기본 스타일 */
+.app-container {
+    padding: 20px;
+    background-color: #f5f5f5;
+    min-height: 100vh;
+}
+
+.form-container {
+    padding: 20px;
+    margin-bottom: 40px;
+    background-color: white;
+    border-radius: 8px;
+}
+
+.search-button {
+    background-color: #0052cc;
+    color: white;
+}
+
+.search-button:hover {
+    background-color: #0040b0;
+}
+
+.data-table {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: Arial, sans-serif;
+}
+
+table th, table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+table th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+.status-badge {
+    padding: 2px 10px;
+    border-radius: 12px;
+    color: white;
+    font-size: 0.8em;
+    font-weight: bold;
+}
+
+.status-in-progress {
+    background-color: #0052cc;
+}
+
+.status-to-do {
+    background-color: #ffab00;
+}
+
+.avatar-container {
+    display: flex;
+    align-items: center;
+}
+
+.avatar {
+    margin-right: 10px;
+}
+
+.rounded-checkbox .MuiSvgIcon-root {
+    border-radius: 50%;
+}
+
+/* App.css */
+
+.issue-badge.epic {
+    background-color: purple;
+    color: white;
+}
+
+.issue-badge.task {
+    background-color: blue;
+    color: white;
+}
+
+.issue-badge.subtask {
+    background-color: green;
+    color: white;
+}
+
+.issue-badge.story {
+    background-color: orange;
+    color: white;
+}
+
+.issue-badge.default {
+    background-color: gray;
+    color: white;
+}
+
+.issue-badge.epic {
+    background-color: purple;
+    color: white;
+}
+
+.issue-badge.task {
+    background-color: blue;
+    color: white;
+}
+
+.issue-badge.subtask {
+    background-color: green;
+    color: white;
+}
+
+.status-badge {
+    font-weight: bold;
+}
+
+.assignee-badge {
+    font-weight: bold;
+}
